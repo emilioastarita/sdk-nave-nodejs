@@ -1,0 +1,41 @@
+{
+  "name": "sdk-nave-nodejs",
+  "description": "Nave SDK for Node.js",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "license": "MIT",
+  "files": ["dist", "README.md", "LICENCE"],
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc",
+    "clean": "rm -rf ./dist/*"
+  },
+  "author": "Emilio Astarita (https://github.com/emilioastarita/)",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:emilioastarita/sdk-nave-nodejs.git"
+  },
+  "keywords": [
+    "api",
+    "nave",
+    "navenegocios",
+    "checkout",
+    "payment",
+    "ipn",
+    "sdk",
+    "integration"
+  ],
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@total-typescript/tsconfig": "^1.0.4",
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.13.14",
+    "dotenv": "^16.4.7",
+    "typescript": "^5.8.2",
+    "vitest": "^3.1.1"
+  }
+}
