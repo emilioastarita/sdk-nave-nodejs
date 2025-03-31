@@ -45,7 +45,13 @@ export class NaveClient {
   private audience: string;
   private storeId: string;
   private platform: string;
-  private token: ResponseNaveToken | null = null;
+  private credentials: {
+    token: ResponseNaveToken | null;
+    expires: number;
+  } = {
+    token: null,
+    expires: 0,
+  };
 
   constructor({
     audience,
@@ -91,10 +97,12 @@ export class NaveClient {
   }
 
   public async ensureToken() {
-    if (!this.token || this.token.expires_in < Date.now()) {
-      this.token = await this.fetchNewToken();
+    if (!this.credentials.token || this.credentials.expires < Date.now()) {
+      this.credentials.token = await this.fetchNewToken();
+      this.credentials.expires =
+        Date.now() + this.credentials.token.expires_in * 1000;
     }
-    return this.token;
+    return this.credentials.token;
   }
 
   public async createOrder(
@@ -125,13 +133,15 @@ export class NaveClient {
     reqOptions: Omit<NaveRequestOptions, 'baseUrl'>,
   ) => {
     await this.ensureToken();
-    if (!this.token) {
+    if (!this.credentials.token) {
       throw new Error('Token not found');
     }
     return this.request<T>({
       ...reqOptions,
       baseUrl: this.baseUrls.ecommerce,
-      headers: { Authorization: `Bearer ${this.token.access_token}` },
+      headers: {
+        Authorization: `Bearer ${this.credentials.token.access_token}`,
+      },
     });
   };
 
