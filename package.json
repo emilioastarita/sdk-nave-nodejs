@@ -1,12 +1,16 @@
 {
   "name": "sdk-nave-nodejs",
   "description": "Nave SDK for Node.js",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
   "license": "MIT",
-  "files": ["dist", "README.md", "LICENCE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENCE"
+  ],
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
@@ -28,12 +32,13 @@
     "integration"
   ],
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
-    "@total-typescript/tsconfig": "^1.0.4",
     "@biomejs/biome": "^1.9.4",
+    "@total-typescript/tsconfig": "^1.0.4",
     "@types/node": "^22.13.14",
+    "@types/node-fetch": "^2.6.12",
     "dotenv": "^16.4.7",
     "typescript": "^5.8.2",
     "vitest": "^3.1.1"
