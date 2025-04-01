@@ -5,6 +5,11 @@ export interface ResponseNaveToken {
   token_type: string;
 }
 
+export interface NaveAmount {
+  currency: string;
+  value: string;
+}
+
 export interface NaveBuyer {
   user_id: string;
   doc_type?: string;
@@ -14,24 +19,21 @@ export interface NaveBuyer {
   phone?: string;
   billing_address?: NaveBillingAddress;
 }
-export type NaveBillingAddress = {
+export interface NaveBillingAddress {
   street_1: string;
   street_2?: string;
   city: string;
   region: string;
   country: string;
   zip_code: string;
-};
-export type NaveProduct = {
+}
+export interface NaveProduct {
   id: string;
   name: string;
   description: string;
   quantity: number;
-  unit_price: {
-    currency: string;
-    value: string;
-  };
-};
+  unit_price: NaveAmount;
+}
 
 export interface BodyNaveCreateOrder {
   /**
@@ -58,10 +60,7 @@ export interface BodyNaveCreateOrder {
   payment_request: {
     transactions: {
       products: NaveProduct[];
-      amount: {
-        currency: string;
-        value: string;
-      };
+      amount: NaveAmount;
     }[];
     buyer: NaveBuyer;
   };
@@ -77,10 +76,7 @@ export interface ResponseNaveCreateOrder {
     qr_data: string;
     payment_request_id: string;
     checkout_url: string;
-    amount: {
-      currency: string;
-      value: string;
-    };
+    amount: NaveAmount;
     redirect_to: string;
   };
   success: boolean;
@@ -107,4 +103,12 @@ export interface ResponseNaveGetOrder {
 export interface ResponseNaveCancelOrder {
   status: 'CANCELLING';
   message: string;
+}
+
+export interface NotificationNavePayment {
+  payment_id: string;
+  payment_check_url: string;
+  payment_request_id: string;
+  order_id: string;
+  status: ResponseNaveGetOrder['status'];
 }
