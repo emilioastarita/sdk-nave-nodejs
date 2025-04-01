@@ -1,7 +1,7 @@
 {
   "name": "sdk-nave-nodejs",
   "description": "Nave SDK for Node.js",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
@@ -14,6 +14,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
+    "prepack": "yarn clean && yarn build",
     "clean": "rm -rf ./dist/*"
   },
   "author": "Emilio Astarita (https://github.com/emilioastarita/)",
