@@ -1,7 +1,7 @@
 {
   "name": "sdk-nave-nodejs",
   "description": "Nave SDK for Node.js",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
