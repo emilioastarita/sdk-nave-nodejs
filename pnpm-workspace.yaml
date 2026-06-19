@@ -1,0 +1,29 @@
+# Force patched versions of transitive deps flagged by `pnpm audit` when the
+# parent package hasn't widened its range yet. esbuild <0.28.1 (via vitest >
+# vite) has GHSA-g7r4-m6w7-qqqr; no released vite depends on 0.28.x yet, so we
+# pin it here until vite catches up.
+overrides:
+  esbuild: '>=0.28.1'
+
+# Supply-chain hardening
+# ---------------------------------------------------------------------------
+# Only install package versions that have been published for at least this many
+# minutes (1440 = 24h). A newly published malicious/compromised release usually
+# gets detected and yanked within hours; this cooldown keeps such versions out
+# of the lockfile until they've had time to be caught.
+minimumReleaseAge: 1440
+# Packages exempted from the cooldown above (e.g. your own first-party packages
+# you publish and want to consume immediately). None needed here yet.
+# minimumReleaseAgeExclude:
+#   - my-own-package
+
+# Verify that node_modules matches the lockfile before running any script,
+# so tampered/desynced installs are caught instead of silently executing.
+verifyDepsBeforeRun: install
+
+# Block postinstall/build scripts by default; only the packages listed below
+# are allowed to run them. Arbitrary install scripts are a primary supply-chain
+# attack vector, so this stays an explicit allowlist.
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true

@@ -1,20 +1,22 @@
 {
   "name": "sdk-nave-nodejs",
   "description": "Nave SDK for Node.js",
-  "version": "0.0.5",
+  "version": "0.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
   "license": "MIT",
+  "packageManager": "pnpm@11.1.2",
   "files": [
     "dist",
     "README.md",
-    "LICENCE"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
-    "prepack": "yarn clean && yarn build",
+    "prepack": "pnpm clean && pnpm build",
     "clean": "rm -rf ./dist/*"
   },
   "author": "Emilio Astarita (https://github.com/emilioastarita/)",
@@ -32,16 +34,15 @@
     "sdk",
     "integration"
   ],
-  "dependencies": {
-    "node-fetch": "^2.7.0"
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.5.0",
     "@total-typescript/tsconfig": "^1.0.4",
-    "@types/node": "^22.13.14",
-    "@types/node-fetch": "^2.6.12",
-    "dotenv": "^16.4.7",
-    "typescript": "^5.8.2",
-    "vitest": "^3.1.1"
+    "@types/node": "^25.9.3",
+    "dotenv": "^17.4.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

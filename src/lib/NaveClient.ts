@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import {
   BodyNaveCreateOrder,
   ResponseNaveCancelOrder,
@@ -6,6 +5,78 @@ import {
   ResponseNaveGetOrder,
   ResponseNaveToken,
 } from './client-types';
+
+const TRANSIENT_CAUSE_CODES = new Set([
+  'UND_ERR_SOCKET',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_REQ_CONTENT_LENGTH_MISMATCH',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'EPIPE',
+]);
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Detects transient transport failures from the global fetch (undici) that are
+ * safe to retry for idempotent requests. This inspects the raw error shape and
+ * never wraps it, so callers can still classify the original error themselves.
+ */
+const isTransientTransportError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  // AbortSignal.timeout() firing surfaces as a TimeoutError; a manual abort as
+  // an AbortError. Both mean the request never completed -> safe to retry.
+  if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+    return true;
+  }
+  if (error instanceof TypeError && error.message === 'fetch failed') {
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause instanceof Error) {
+      const code = (cause as { code?: unknown }).code;
+      if (typeof code === 'string' && TRANSIENT_CAUSE_CODES.has(code)) {
+        return true;
+      }
+      if (
+        cause.message.includes('terminated') ||
+        cause.message.includes('other side closed')
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+// POSIX single-quote escaping so the value survives a copy-paste into a shell.
+const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+
+/**
+ * Render a request as a runnable `curl` command for debugging failed calls.
+ * Gated by the NAVE_DEBUG_CURL env var (see `request`). NOTE: this includes
+ * the Authorization header verbatim so the command can be replayed as-is.
+ */
+const toCurlCommand = (
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  body?: string,
+): string => {
+  const parts = ['curl', '-X', method];
+  for (const [key, value] of Object.entries(headers)) {
+    parts.push('-H', shellQuote(`${key}: ${value}`));
+  }
+  if (body) {
+    parts.push('--data', shellQuote(body));
+  }
+  parts.push(shellQuote(url));
+  return parts.join(' ');
+};
 
 type JSONValue =
   | string
@@ -45,6 +116,9 @@ export class NaveClient {
   private audience: string;
   private storeId: string;
   private platform: string;
+  private timeoutMs: number;
+  private maxRetries: number;
+  private tokenRefreshBufferMs: number;
   private credentials: {
     token: ResponseNaveToken | null;
     expires: number;
@@ -52,6 +126,9 @@ export class NaveClient {
     token: null,
     expires: 0,
   };
+  // Shared in-flight token fetch, so concurrent callers don't all hit the auth
+  // endpoint at once (thundering herd). Cleared once the fetch settles.
+  private tokenRefreshPromise: Promise<ResponseNaveToken> | null = null;
 
   constructor({
     audience,
@@ -60,6 +137,9 @@ export class NaveClient {
     environment = 'testing',
     storeId,
     platform,
+    timeoutMs = 15000,
+    maxRetries = 2,
+    tokenRefreshBufferMs = 60000,
   }: {
     clientId: string;
     clientSecret: string;
@@ -67,6 +147,9 @@ export class NaveClient {
     environment?: Environment;
     storeId: string;
     platform: string;
+    timeoutMs?: number;
+    maxRetries?: number;
+    tokenRefreshBufferMs?: number;
   }) {
     this.baseUrls =
       environment === 'production'
@@ -77,6 +160,9 @@ export class NaveClient {
     this.clientId = clientId;
     this.storeId = storeId;
     this.platform = platform;
+    this.timeoutMs = timeoutMs;
+    this.maxRetries = maxRetries;
+    this.tokenRefreshBufferMs = tokenRefreshBufferMs;
     this.headers = {
       'Content-Type': 'application/json',
     };
@@ -97,12 +183,33 @@ export class NaveClient {
   }
 
   public async ensureToken() {
-    if (!this.credentials.token || this.credentials.expires < Date.now()) {
-      this.credentials.token = await this.fetchNewToken();
-      this.credentials.expires =
-        Date.now() + this.credentials.token.expires_in * 1000;
+    // Refresh a bit before the real expiry (tokenRefreshBufferMs) to absorb
+    // clock skew and in-flight latency, so we never send a just-expired token.
+    if (
+      this.credentials.token &&
+      this.credentials.expires - this.tokenRefreshBufferMs > Date.now()
+    ) {
+      return this.credentials.token;
     }
-    return this.credentials.token;
+
+    // Coalesce concurrent refreshes onto a single fetch. The first caller
+    // creates the promise; the rest await the same one. Cleared on settle so a
+    // failed fetch doesn't get cached and the next call can retry.
+    if (!this.tokenRefreshPromise) {
+      this.tokenRefreshPromise = this.fetchNewToken()
+        .then((token) => {
+          this.credentials.token = token;
+          // expires_in is documented in seconds; Number() guards against the
+          // API returning it as a string.
+          this.credentials.expires =
+            Date.now() + Number(token.expires_in) * 1000;
+          return token;
+        })
+        .finally(() => {
+          this.tokenRefreshPromise = null;
+        });
+    }
+    return this.tokenRefreshPromise;
   }
 
   public async createOrder(
@@ -145,7 +252,7 @@ export class NaveClient {
     });
   };
 
-  private request = async <T>({
+  public request = async <T>({
     method = 'GET',
     path,
     body,
@@ -157,21 +264,51 @@ export class NaveClient {
     const _headers: Record<string, string> = newHeaders
       ? newHeaders
       : { ...this.headers, ...headers };
-    const res = await fetch(url, {
-      method,
-      headers: _headers,
-      body: method !== 'GET' && body ? JSON.stringify(body) : undefined,
-    });
+    const serializedBody =
+      method !== 'GET' && body ? JSON.stringify(body) : undefined;
 
-    if (!res.ok) {
-      console.log(
-        `Error (${
-          res.status
-        }) fetching ${url} \nwith ${method} \n and Body: ${JSON.stringify(body)} \n and Headers: ${JSON.stringify(_headers)}`,
-      );
-      throw new Error(await res.text());
+    // Only idempotent GETs are retried. Retrying a POST (e.g. createOrder)
+    // could create duplicate orders, so non-GET runs a single attempt.
+    const maxAttempts = method === 'GET' ? this.maxRetries + 1 : 1;
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        // A fresh timeout signal per attempt; AbortSignal.timeout fires once.
+        const res = await fetch(url, {
+          method,
+          headers: _headers,
+          body: serializedBody,
+          signal: AbortSignal.timeout(this.timeoutMs),
+        });
+
+        if (!res.ok) {
+          console.log(
+            `Error (${
+              res.status
+            }) fetching ${url} \nwith ${method} \n and Body: ${JSON.stringify(body)} \n and Headers: ${JSON.stringify(_headers)}`,
+          );
+          // Set NAVE_DEBUG_CURL=1 to also print a ready-to-run curl command
+          // (includes auth) so the failing request can be replayed manually.
+          if (process.env.NAVE_DEBUG_CURL) {
+            console.log(
+              `Reproduce with:\n${toCurlCommand(method, url, _headers, serializedBody)}`,
+            );
+          }
+          throw new Error(await res.text());
+        }
+
+        return (await res.json()) as T;
+      } catch (error) {
+        const canRetry =
+          attempt < maxAttempts - 1 && isTransientTransportError(error);
+        if (!canRetry) {
+          // Rethrow the ORIGINAL error untouched: the consuming backend
+          // classifies transport failures via `instanceof TypeError` and
+          // `error.cause.code`. Wrapping it would break that classification.
+          throw error;
+        }
+        await sleep(200 * 2 ** attempt);
+      }
     }
-
-    return res.json() as Promise<T>;
   };
 }

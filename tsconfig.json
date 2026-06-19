@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "./src/",
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    // TS 6 no longer auto-includes ambient @types here; load Node's globals
+    // (fetch, AbortSignal, console, setTimeout, ...) explicitly. No DOM lib.
+    "types": ["node"]
   },
   "exclude": ["node_modules", "test", "vitest.config.ts", "dist"]
 }
