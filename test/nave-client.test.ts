@@ -41,6 +41,14 @@ describe('Nave client integration tests with Testing environment', async () => {
     }
   });
 
+  it('test', async () => {
+    const token = await client.request({
+      method: 'GET',
+      path: '/test',
+      baseUrl: 'http://localhost:5999',
+    });
+  });
+
   it('should get nave token', async () => {
     const token = await client.ensureToken();
     expect(token.access_token).toBeTypeOf('string');
