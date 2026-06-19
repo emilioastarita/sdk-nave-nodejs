@@ -95,7 +95,7 @@ const ENVIRONMENT_URLS = Object.freeze({
   },
   testing: {
     security: 'https://homoservices.apinaranja.com',
-    ecommerce: 'https://api-sandbox.ranty.io',
+    ecommerce: 'https://e3-api.ranty.io',
   },
 });
 
