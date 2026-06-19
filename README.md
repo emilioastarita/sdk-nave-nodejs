@@ -12,7 +12,7 @@ https://navenegocios.ar/
 
 ## Install
 
-Ensure you have Node.js v14 or later installed. Then, run the following command to install the SDK:
+Ensure you have Node.js v18 or later installed. Then, run the following command to install the SDK:
 
 
 ```
@@ -90,9 +90,9 @@ file with your testing credentials at the root of the project.
 If you want to try it:
 
 1. Git clone this repo
-2. Install deps: `yarn install`
+2. Install deps: `pnpm install`
 3. Provide the `.env` file copying the `.env.example` format
-4. Run the suite `yarn run test`
+4. Run the suite `pnpm test`
 
 
 
