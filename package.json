@@ -11,7 +11,7 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "LICENCE"
+    "LICENSE"
   ],
   "scripts": {
     "test": "vitest run",
