@@ -53,6 +53,31 @@ const isTransientTransportError = (error: unknown): boolean => {
   return false;
 };
 
+// POSIX single-quote escaping so the value survives a copy-paste into a shell.
+const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+
+/**
+ * Render a request as a runnable `curl` command for debugging failed calls.
+ * Gated by the NAVE_DEBUG_CURL env var (see `request`). NOTE: this includes
+ * the Authorization header verbatim so the command can be replayed as-is.
+ */
+const toCurlCommand = (
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  body?: string,
+): string => {
+  const parts = ['curl', '-X', method];
+  for (const [key, value] of Object.entries(headers)) {
+    parts.push('-H', shellQuote(`${key}: ${value}`));
+  }
+  if (body) {
+    parts.push('--data', shellQuote(body));
+  }
+  parts.push(shellQuote(url));
+  return parts.join(' ');
+};
+
 type JSONValue =
   | string
   | null
@@ -70,7 +95,7 @@ const ENVIRONMENT_URLS = Object.freeze({
   },
   testing: {
     security: 'https://homoservices.apinaranja.com',
-    ecommerce: 'https://e3-api.ranty.io',
+    ecommerce: 'https://api-sandbox.ranty.io',
   },
 });
 
@@ -234,6 +259,13 @@ export class NaveClient {
               res.status
             }) fetching ${url} \nwith ${method} \n and Body: ${JSON.stringify(body)} \n and Headers: ${JSON.stringify(_headers)}`,
           );
+          // Set NAVE_DEBUG_CURL=1 to also print a ready-to-run curl command
+          // (includes auth) so the failing request can be replayed manually.
+          if (process.env.NAVE_DEBUG_CURL) {
+            console.log(
+              `Reproduce with:\n${toCurlCommand(method, url, _headers, serializedBody)}`,
+            );
+          }
           throw new Error(await res.text());
         }
 
