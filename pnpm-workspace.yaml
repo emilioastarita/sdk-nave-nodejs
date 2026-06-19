@@ -1,3 +1,10 @@
+# Force patched versions of transitive deps flagged by `pnpm audit` when the
+# parent package hasn't widened its range yet. esbuild <0.28.1 (via vitest >
+# vite) has GHSA-g7r4-m6w7-qqqr; no released vite depends on 0.28.x yet, so we
+# pin it here until vite catches up.
+overrides:
+  esbuild: '>=0.28.1'
+
 # Supply-chain hardening
 # ---------------------------------------------------------------------------
 # Only install package versions that have been published for at least this many
