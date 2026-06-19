@@ -118,6 +118,7 @@ export class NaveClient {
   private platform: string;
   private timeoutMs: number;
   private maxRetries: number;
+  private tokenRefreshBufferMs: number;
   private credentials: {
     token: ResponseNaveToken | null;
     expires: number;
@@ -125,6 +126,9 @@ export class NaveClient {
     token: null,
     expires: 0,
   };
+  // Shared in-flight token fetch, so concurrent callers don't all hit the auth
+  // endpoint at once (thundering herd). Cleared once the fetch settles.
+  private tokenRefreshPromise: Promise<ResponseNaveToken> | null = null;
 
   constructor({
     audience,
@@ -135,6 +139,7 @@ export class NaveClient {
     platform,
     timeoutMs = 15000,
     maxRetries = 2,
+    tokenRefreshBufferMs = 60000,
   }: {
     clientId: string;
     clientSecret: string;
@@ -144,6 +149,7 @@ export class NaveClient {
     platform: string;
     timeoutMs?: number;
     maxRetries?: number;
+    tokenRefreshBufferMs?: number;
   }) {
     this.baseUrls =
       environment === 'production'
@@ -156,6 +162,7 @@ export class NaveClient {
     this.platform = platform;
     this.timeoutMs = timeoutMs;
     this.maxRetries = maxRetries;
+    this.tokenRefreshBufferMs = tokenRefreshBufferMs;
     this.headers = {
       'Content-Type': 'application/json',
     };
@@ -176,12 +183,33 @@ export class NaveClient {
   }
 
   public async ensureToken() {
-    if (!this.credentials.token || this.credentials.expires < Date.now()) {
-      this.credentials.token = await this.fetchNewToken();
-      this.credentials.expires =
-        Date.now() + this.credentials.token.expires_in * 1000;
+    // Refresh a bit before the real expiry (tokenRefreshBufferMs) to absorb
+    // clock skew and in-flight latency, so we never send a just-expired token.
+    if (
+      this.credentials.token &&
+      this.credentials.expires - this.tokenRefreshBufferMs > Date.now()
+    ) {
+      return this.credentials.token;
     }
-    return this.credentials.token;
+
+    // Coalesce concurrent refreshes onto a single fetch. The first caller
+    // creates the promise; the rest await the same one. Cleared on settle so a
+    // failed fetch doesn't get cached and the next call can retry.
+    if (!this.tokenRefreshPromise) {
+      this.tokenRefreshPromise = this.fetchNewToken()
+        .then((token) => {
+          this.credentials.token = token;
+          // expires_in is documented in seconds; Number() guards against the
+          // API returning it as a string.
+          this.credentials.expires =
+            Date.now() + Number(token.expires_in) * 1000;
+          return token;
+        })
+        .finally(() => {
+          this.tokenRefreshPromise = null;
+        });
+    }
+    return this.tokenRefreshPromise;
   }
 
   public async createOrder(
