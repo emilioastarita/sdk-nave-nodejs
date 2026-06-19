@@ -32,7 +32,9 @@ describe('gzipped HTTP response handling', () => {
       });
       res.end(gzipped);
     });
-    await new Promise<void>((resolve) => server.listen(0, resolve));
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
     const { port } = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${port}`;
   });
