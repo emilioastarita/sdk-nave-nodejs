@@ -82,6 +82,41 @@ console.log('Order status', orderStatus);
 
 ```
 
+## Error handling
+
+The client distinguishes two failure modes so callers can decide whether a
+failure is a *definitive answer* or a *transient/unknown* one — important for
+flows like pending-payment reconciliation:
+
+- **HTTP error responses** (any non-2xx) throw a typed `NaveHttpError` with a
+  machine-readable `status`, `category` (`rate_limit` / `server` / `client` /
+  `unknown`), `retryable` flag, the raw `body`, and a parsed `data` when the
+  API responds with JSON.
+- **Transport/network failures** (timeouts, socket resets, DNS errors,
+  premature close) are rethrown **unchanged** as the original
+  `TypeError: fetch failed`, so they can still be classified via
+  `error.cause.code`.
+
+```typescript
+import { NaveClient, NaveHttpError } from 'sdk-nave-nodejs';
+
+try {
+  const order = await client.getOrder(paymentRequestId);
+  // ...use order.status
+} catch (err) {
+  if (err instanceof NaveHttpError) {
+    // Definitive HTTP answer from the API.
+    if (err.retryable) {
+      // 429 / 5xx -> the real outcome is unknown, ask again later.
+    } else {
+      // 4xx (404, 422, ...) -> settled; do not retry. Inspect err.data.
+    }
+  } else {
+    // Transport failure: payment status is unknown -> retry later.
+  }
+}
+```
+
 ## Integration tests
 
 There is a working example that runs against the testing environment and is enclosed in a Vitest test. You need to provide a valid `.env`

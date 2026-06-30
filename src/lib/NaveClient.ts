@@ -5,6 +5,7 @@ import {
   ResponseNaveGetOrder,
   ResponseNaveToken,
 } from './client-types';
+import { NaveHttpError } from './errors';
 
 const TRANSIENT_CAUSE_CODES = new Set([
   'UND_ERR_SOCKET',
@@ -294,7 +295,18 @@ export class NaveClient {
               `Reproduce with:\n${toCurlCommand(method, url, _headers, serializedBody)}`,
             );
           }
-          throw new Error(await res.text());
+          // A non-2xx HTTP response is a *definitive* answer from the API (as
+          // opposed to a transport failure). Surface it as a typed error so
+          // callers can classify by status/category instead of string-matching
+          // the (possibly HTML) body. The raw body stays available via `.body`.
+          throw new NaveHttpError({
+            status: res.status,
+            statusText: res.statusText,
+            method,
+            url,
+            body: await res.text(),
+            contentType: res.headers.get('content-type'),
+          });
         }
 
         return (await res.json()) as T;

@@ -5,6 +5,42 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-30
+
+Adds a typed, machine-readable error for HTTP error responses so consumers can
+classify a failure (transport vs HTTP, and the HTTP status / category) without
+string-matching the response body.
+
+### Added
+
+- `NaveHttpError` (exported from the package root): thrown on any non-2xx
+  response from the Nave API. Extends the built-in `Error` and exposes:
+  - `status` / `statusText` — the HTTP status code and text.
+  - `method` / `url` — the originating request.
+  - `body` — the raw, unparsed response body (JSON, plain text, or an HTML
+    error page).
+  - `data` — the parsed body when the API responds with `application/json`,
+    otherwise `null`.
+  - `category` — a coarse, stable bucket: `'rate_limit'` (429), `'server'`
+    (5xx), `'client'` (4xx), or `'unknown'`.
+  - `retryable` — `true` for 429/5xx (outcome unknown, ask again later),
+    `false` for 4xx (a definitive answer).
+- `NaveErrorCategory` type, also exported from the package root.
+
+### Changed
+
+- **BREAKING (error shape):** A non-2xx response now throws a `NaveHttpError`
+  instead of a plain `Error` whose `.message` was the raw response body. The
+  raw body is still available verbatim via `error.body`. Code that read the
+  status out of `.message` should read `error.status` / `error.category`; code
+  that only does `catch` / `instanceof Error` is unaffected.
+- Transport failures continue to be rethrown **unchanged** (still a
+  `TypeError: fetch failed` with the original `cause`), so the transport-vs-HTTP
+  distinction is simply `error instanceof NaveHttpError`. SDK auto-retry remains
+  transport-only; HTTP-level retry is left to the caller via `retryable`.
+
+[0.2.0]: https://github.com/emilioastarita/sdk-nave-nodejs/compare/v0.1.0...v0.2.0
+
 ## [0.1.0] - 2026-06-19
 
 This is a **breaking** release: the SDK no longer bundles `node-fetch` and now
